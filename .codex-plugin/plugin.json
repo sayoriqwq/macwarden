@@ -1,0 +1,21 @@
+{
+  "name": "macwarden",
+  "version": "0.1.0",
+  "description": "Capture and recall verified host state with Macwarden ScopeLogs.",
+  "author": {
+    "name": "Macwarden"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Macwarden",
+    "shortDescription": "Capture and recall verified host state",
+    "longDescription": "Use Macwarden ScopeLogs to capture verified host state and recall it in later work.",
+    "developerName": "Macwarden",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "mw: capture the verified host state from this work",
+      "mw: recall the host state relevant to this request"
+    ]
+  }
+}
