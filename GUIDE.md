@@ -70,6 +70,8 @@ Transition template 同时携带完整 Before/After Observations。已有 Before
 
 Skills 判断事实质量；程序只判断结构、引用完整性和 append-only identity。Observation 不是“最新状态”指针，Change 也不是命令流。
 
+Canonical record 的正文跟随用户语言；中文请求使用中文，ID、路径、命令和选项名保持原样。Recall 将同一批 records 临时组织为用户语言的审计视图，不保存第二份报告或真源。
+
 ## Koka 边界
 
 Production code 只有两个 module：

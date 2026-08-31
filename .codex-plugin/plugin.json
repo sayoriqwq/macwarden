@@ -1,6 +1,6 @@
 {
   "name": "macwarden",
-  "version": "0.1.0+codex.20260831165339",
+  "version": "0.1.0+codex.20260831174320",
   "description": "Capture and recall verified host state with Macwarden records.",
   "author": {
     "name": "Macwarden"
