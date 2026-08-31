@@ -1,18 +1,18 @@
 ---
 name: mw-recall
-description: 'Use only when a user request begins with "mw: recall" to retrieve and apply relevant state from authoritative Macwarden ScopeLogs.'
+description: 'Use only when a request begins with "mw: recall" to retrieve Macwarden Observations and Transitions and apply their evidence to current work.'
 ---
 
 # Macwarden recall
 
 ## Process
 
-1. **Form the query.** Use suffix text after `mw: recall` as the primary query and the current request or conversation as secondary context. With no suffix, use the current request or conversation directly. **Complete when:** one concrete retrieval question or supplied modification instruction is explicit.
+1. **Form the query.** Use suffix text after `mw: recall`, falling back to the current request. **Complete when:** one retrieval question or authorized modification is explicit.
 
-2. **Select narrowly.** Read `macwarden --help`, run `macwarden list`, and semantically choose the smallest plausible candidate set from the stable Scope IDs. Read those complete logs with `macwarden show`; broaden only when the first candidates cannot answer. **Complete when:** the selected ScopeLogs answer the query or establish exactly what is absent.
+2. **Select narrowly.** Read `macwarden --help`, run `macwarden list`, and choose the smallest plausible record selectors. Use `macwarden show` to follow Transition Before/After references; broaden only when those records cannot answer. Selection is Agent judgment, not a Core query. **Complete when:** the relevant evidence graph is present or the missing record is identified.
 
-3. **Use the recall.** For retrieval alone, return only relevant current State, Reasons, constraints, and Scope identities. For a concrete modification instruction, cooperate on that instruction under the recalled constraints. Keep work within supplied authority and current context; when required information is absent, name it and return control. **Complete when:** the request is answered from the logs or the authorized modification is verified.
+3. **Use the evidence.** Observations are historical facts, not an automatically computed current state. For retrieval, report the relevant State, Context, Reason, Change, and unknowns. For modification, read back the host first, then derive a current patch from the target Observation and relevant Transitions; never replay Change as a command stream. **Complete when:** the question is answered or the authorized host result is verified.
 
-4. **Close verified transitions.** If the authorized work produced verified new host state, invoke the model-invoked `mw-capture` Skill. That Skill is the single source of truth for capture; the original `mw: recall` instruction supplies write authority without a second prefix. **Complete when:** its canonical verification criterion succeeds.
+4. **Close the loop.** When authorized work establishes new host state, invoke the model-invoked `mw-capture` Skill. The original `mw: recall` request supplies capture authority. **Complete when:** the new canonical records pass that Skill's verification criterion.
 
-Recall uses Agent-native semantic choice over full ScopeLogs. Its retrieval boundary is the configured authority; external research and infrastructure indexing require separate work.
+Recall uses the configured authority and Agent-native semantic choice. It does not add an index or external retrieval system.

@@ -1,105 +1,88 @@
 # Macwarden 导读
 
-Macwarden 用一个很小的 Koka CLI 维护 ScopeLog。每个 Scope 回答一个长期稳定的业务问题；文件最后一个 State 是该 Scope 已确认的当前状态。
+领域词汇和不变量以 [CONTEXT.md](CONTEXT.md) 为准。Macwarden 本身只做两件事：保存 immutable Observation/Transition records，并让 Capture/Recall Skills 围绕这些记录形成闭环。
 
 ```text
-ScopeLog = ScopeId + Initial State + List<Transition(Reason, New State)>
-         = S0 --R1--> S1 --R2--> ... --Rn--> Sn
+mw-capture → Core → authority → mw-recall → verified host work → mw-capture
 ```
-
-State 与 Reason 都是 opaque Markdown。CLI 只保护固定标题、非空内容、Scope 匹配和 Transition 拓扑，不判断文字是否真实、完整或语义相等。
 
 ## 构建与验收
 
-需要 Koka 3。仓库的公开验收入口会在临时目录构建名为 `macwarden` 的可执行文件：
+需要 Koka 3。唯一公开验收入口在隔离临时目录构建 Core checks 与 CLI，不读取或修改用户 authority：
 
 ```console
 ./acceptance.sh
 ```
 
-该入口在临时 build 目录分别编译无框架的 Koka core checks 与 `macwarden`，先执行 core laws，再通过隔离的 HOME、XDG 配置、Git 仓库和 Scope 目录检查 CLI 黑盒边界，不接触用户已有 authority。Shell 只保留 setup 与持久 authority、三种 capture、list/show、拒绝写入及 tracked residue scan；parse/render、拓扑、显式 domain error 与 rollback payload identity 直接由 Koka 验证。
-
-手动构建时把 application 模块的输出命名为 `macwarden`。Codex 插件只分发 Agent Skills，不包含 CLI、runtime 或 installer wrapper。使用 Skill 前，另行构建或安装 `macwarden`，确保命令在 `PATH` 中，并运行一次 `macwarden setup`。
-
-## 一次性设置 authority
-
-每个用户只有一个 active ScopeLog 目录。首次使用先运行：
+手动构建：
 
 ```console
-macwarden setup
+nix shell nixpkgs#koka --command koka -v0 -i./src -o macwarden src/macwarden.kk
 ```
 
-无参数时，Macwarden 找到当前 Git 工作区根目录并选择其中的 `scopes/`。也可以向 `setup` 提供一个明确目录。两种形式都会创建或验证目录、canonicalize 为绝对路径，并打印最终 authority。
+## Authority
 
-选择结果存放在 absolute `XDG_CONFIG_HOME` 下；未设置或值为 relative path 时使用 home 的标准 `.config` 目录。配置文件只保存 authority 的绝对路径。工作目录变化不会改变选择，只有再次运行 `setup` 才会切换它；V1 没有 profile。
+首次使用：
 
-`macwarden path` 显示当前选择。尚未设置时，其余操作会停止并给出一条可直接执行的 setup 指引，不会猜测目录。
+```console
+macwarden setup [AUTHORITY_DIR]
+```
 
-## 高层 CLI
+省略目录时使用当前 Git 根目录下的 `authority/`。选择保存为绝对路径，后续工作目录不会改变它。Authority 只有两个 canonical record 目录：
 
-先以实际程序为准：
+```text
+authority/
+  observations/<id>.md
+  transitions/<id>.md
+```
+
+现有文件永不覆盖。CLI 先校验整个 draft，再写新的 Observations，最后写 Transitions；因此失败不会留下引用不存在 Observation 的 Transition。Git-backed authority 由 Capture Skill 在 readback 后提交。
+
+## CLI
+
+实时 contract 以程序为准：
 
 ```console
 macwarden --help
 macwarden capture --help
 ```
 
-`list` 只列出稳定 Scope ID，不读取所有正文。`show` 接受一个或多个精确 ID，返回完整 canonical ScopeLog；每个日志自身保留受保护的 `# Scope:` 起始标题，因此多日志边界明确。CLI 不提供语义搜索，候选选择由 Agent 完成。
+- `path`：显示 configured authority。
+- `list`：列出 `observations/<id>` 与 `transitions/<id>` selectors。
+- `show <selector>...`：读取并验证 canonical records。
+- `capture <draft.md>`：整体校验并追加一个或多个 records。
 
-`capture` 只消费明确的 Markdown 文件，不从 prose 推断字段。它覆盖三种操作：
+CLI 不提供语义搜索。Recall Skill 根据 selector 和 Transition references 选择最小记录集。
 
-- 新 Scope 只有已确认的当前 State：建立 initial State。
-- 新 Scope 同时有可信 Before State、Reason、After State：一次完成 initial State 与第一条 Transition。
-- 已有 Scope 有一个 Reason 与 self-contained New State：追加一条 Transition。
+Draft 直接拼接 canonical records，分隔线为 `<!-- macwarden:record -->`。它没有独立 schema。稳定输入骨架只有：
 
-组合含糊、缺输入、body 为空或包含保留结构标题时，CLI 在写入前拒绝。成功输出 Scope、canonical 路径及 initialized/appended 结果，调用方再用 `show` 验证最终 State。当前参数名与组合规则只由 `macwarden capture --help` 维护，本文不缓存它们。
+- [Observation template](skills/mw-capture/references/observation.md)
+- [Transition template](skills/mw-capture/references/transition.md)
 
-低层 `init` 与 `append` 仍保留，用于直接操作同一个 configured authority；日常 Agent 流程使用 `capture`。
+Transition template 同时携带完整 Before/After Observations。已有 Before 必须与 authority 中相同 identity 的 record 完全一致；Core 将其视为 idempotent 输入，只写真正新增的 records。多个 Scope 通过重复 Observation block 和 reference 行表达。
+
+## Skills
+
+插件只包含：
+
+- `mw-capture`：把当前证据蒸馏成一个 draft，调用 CLI，并验证/提交新增 records。
+- `mw-recall`：沿 references 读取相关历史，以当前 host readback 重新计算工作；验证完成后调用 Capture 闭环。
+
+Skills 判断事实质量；程序只判断结构、引用完整性和 append-only identity。Observation 不是“最新状态”指针，Change 也不是命令流。
+
+## Koka 边界
+
+Production code 只有两个 module：
+
+```text
+src/macwarden/core.kk  pure parse, validate, capture, render
+src/macwarden.kk       CLI, configured authority, filesystem adapter
+```
+
+Core 是唯一 record grammar authority。CLI 直接使用 Koka 标准 filesystem、environment、path、process 与 exception effects。没有 Repository abstraction、第三个 production module、transaction manager、Capture record、semantic index、host mutation 或 recovery program。
 
 ## Codex 插件
 
-仓库根目录是名为 `macwarden` 的 Codex 插件；`.codex-plugin/plugin.json` 直接指向现有 `skills/`，因此 Skill source 只有一份：
+`.codex-plugin/plugin.json` 直接分发现有 `skills/`，不安装 CLI。安装插件前需单独把 `macwarden` 放入 `PATH` 并完成一次 `setup`。
 
-- `skills/mw-capture/SKILL.md`
-- `skills/mw-recall/SKILL.md`
-
-插件不声明 MCP server、app、hook 或其他能力。配置一个包含该插件的 marketplace source 后，用当前 CLI 安装：
-
-```console
-codex plugin marketplace add MARKETPLACE_SOURCE
-codex plugin add macwarden@MARKETPLACE
-```
-
-安装后开始新的 Codex session，再使用 `mw: capture ...` 或 `mw: recall ...`。插件不会安装 `macwarden` 命令；其独立 prerequisite 见“构建与验收”。
-
-本 package contract 于 2026-08-27 按以下 OpenAI 官方来源核对：
-
-- [Build plugins](https://developers.openai.com/plugins/build/plugins)
-- [Agent Skills](https://developers.openai.com/codex/skills)
-- [`openai/codex` plugin validator at `e363b08c9175ac1cbe5893615dd2cb9ddf95043b`](https://github.com/openai/codex/blob/e363b08c9175ac1cbe5893615dd2cb9ddf95043b/codex-rs/skills/src/assets/samples/plugin-creator/scripts/validate_plugin.py)
-
-本地验证版本为 `codex-cli 0.146.0`（官方 tag `rust-v0.146.0`，commit `e363b08c9175ac1cbe5893615dd2cb9ddf95043b`）。
-
-### `mw: capture [optional scope hint]`
-
-Capture 只使用当前任务或对话。它先确认 authority 并读取实时 CLI help；有 hint 时先检查该 Scope，否则从 cheap inventory 中选择最小候选集。随后将上下文蒸馏为稳定 Scope、核心 Reason 与 self-contained current State。新 Scope 若拥有可信 Before/Reason/After，会保留这条 Transition。
-
-显式前缀提供写入 Macwarden 的 authority。Skill 只在 Scope 或事实会被缺失、冲突信息实质改变时提问。它通过临时 Markdown 调用 CLI，并在读回 canonical ScopeLog、确认 intended current State 后才完成。
-
-### `mw: recall [optional semantic query]`
-
-Recall 优先使用前缀后的 query；没有 suffix 时使用当前请求或上下文。它从 `list` 的稳定 ID 语义选择最小候选集，再以 `show` 读取完整日志，首选候选不能回答时才扩大。
-
-纯检索只返回相关 current State、Reasons、约束和 Scope identity。若同一请求包含明确修改指令，Recall 在已记录约束下协作；信息不足就说明缺口并交还控制。经授权工作产生 verified new host state 时，它通过指向 model-invoked Capture Skill 的单一 context pointer 闭环，不复制 Capture workflow，也不要求第二个前缀。
-
-两条流程都以 configured ScopeLogs 和当前上下文为边界，不建立 embedding、vector index 或网络检索层。
-
-## canonical grammar 与 Koka 边界
-
-一个文件由固定标题组成：一个 Scope heading、一个 initial State，随后是零个或多个 Transition Reason/State 对。State 数始终比 Transition 数多一。
-
-production code 只有两个工程层。pure core 拥有 `ScopeId`、`State`、`Reason`、`Transition`、`ScopeLog` ADT、显式 domain errors、smart constructors，以及 total parse/render/append transformation；它不接触 filesystem、environment、process、config 或 CLI。Old State 由前驱 State 推导，Current State 由最后一个 State 推导，因此不存重复字段。
-
-body 作为原始字符串保留；`make-state` 与 `make-reason` 只以 trim 判断 blank，成功值仍携带原字符串。整行 `## State`、`## Transition` 或 `# Scope: ...` 会被拒绝，普通 Markdown、Unicode、尾随空格和 inline 标题仍可保留。
-
-application/CLI 层只使用 Koka 标准 filesystem、environment、path、process 与 exception effects，以既有 `<fsys,exn>` 边界负责 configured authority、文件读取写入、command behavior，并把 core error 转成 CLI exception。可执行入口与 dispatch 留在同一层，无第三个 production wrapper。没有 custom effect、generic schema、host adapter、background capture、semantic index 或自动 host mutation。
+本 package contract 于 2026-08-27 依据 OpenAI 的 [Build plugins](https://developers.openai.com/plugins/build/plugins) 与 [Agent Skills](https://developers.openai.com/codex/skills) 核对。

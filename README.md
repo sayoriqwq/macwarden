@@ -1,40 +1,23 @@
 # Macwarden
 
-Macwarden is a small Koka CLI and OpenAI Codex plugin for recording verified, mutable host state as ScopeLogs.
+Macwarden is a small Koka CLI and Codex plugin for recording verified mutable host state as immutable Observations and Transitions.
 
 ```text
-ScopeLog = ScopeId + Initial State + List<Transition(Reason, New State)>
+Observation = ObservationId + ScopeId + Context + State
+Transition  = TransitionId + Before[] + Reason + Change + After[]
 ```
 
-Each Scope answers one stable question. Its final State is the current local authority, and every change preserves the Reason and complete New State that replaced the previous one.
-
-Macwarden intentionally does not mutate the host, run a daemon, build a semantic index, or treat observations as declarative configuration. Keep real ScopeLogs in a private Git repository; this public repository contains only the mechanism.
+The CLI validates structure and append-only identity. The Skills judge evidence quality, recall relevant history, and close verified host work with a new capture. Macwarden does not mutate the host, infer current state, run a daemon, build an index, or store recovery programs.
 
 ## Validate and build
 
-Koka 3 is required. The acceptance entry point builds the core checks and CLI in a temporary directory:
-
 ```console
 ./acceptance.sh
+nix shell nixpkgs#koka --command koka -v0 -i./src -o macwarden src/macwarden.kk
+macwarden setup /path/to/private/authority
 ```
 
-Build the executable directly when needed:
-
-```console
-nix shell nixpkgs#koka --command koka -v0 -i./src -o macwarden src/scopelog.kk
-macwarden setup /path/to/private/scopes
-```
-
-## Codex plugin
-
-The repository root is a Codex plugin package containing exactly two Skills:
-
-- `mw-capture` records a verified State or Transition.
-- `mw-recall` retrieves the smallest relevant set of ScopeLogs.
-
-The plugin does not install the `macwarden` executable. Put the CLI on `PATH`, configure its private authority once, then install this package through a Codex plugin marketplace.
-
-See [GUIDE.md](GUIDE.md) for the model, CLI contract, plugin specification sources, and workflow details.
+The plugin contains `mw-capture` and `mw-recall`; it does not install the CLI. See [CONTEXT.md](CONTEXT.md) for the domain and [GUIDE.md](GUIDE.md) for operation.
 
 ## License
 
