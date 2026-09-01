@@ -166,6 +166,38 @@ test "$race_successes" = 1
 $macwarden show observations/concurrent-record >"$tmp/race-winner.md"
 test "$(grep -c '^# Observation: concurrent-record$' "$tmp/race-winner.md")" = 1
 
+order_writer_pids=()
+order_reader_pids=()
+for index in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  sed \
+    -e "s/TRANSITION_ID/order-$index/g" \
+    -e "s/BEFORE_OBSERVATION_ID/order-before-$index/g" \
+    -e "s/AFTER_OBSERVATION_ID/order-after-$index/g" \
+    -e "s/BEFORE_SCOPE_ID/order-scope-$index/g" \
+    -e "s/AFTER_SCOPE_ID/order-scope-$index/g" \
+    -e "s/BEFORE_CONTEXT/Observed before concurrent capture $index./g" \
+    -e "s/AFTER_CONTEXT/Observed after concurrent capture $index./g" \
+    -e "s/BEFORE_STATE/- before: $index/g" \
+    -e "s/AFTER_STATE/- after: $index/g" \
+    -e "s/REASON/Concurrent transition $index./g" \
+    -e "s/CHANGE/Applied concurrent transition $index./g" \
+    "$transition_template" >"$tmp/order-$index.md"
+  (
+    while [[ ! -e "$tmp/order-start" ]]; do :; done
+    "$macwarden" capture "$tmp/order-$index.md"
+  ) >"$tmp/order-writer-$index.out" 2>&1 &
+  order_writer_pids+=("$!")
+  (
+    while [[ ! -e "$tmp/order-start" ]]; do :; done
+    "$macwarden" list >/dev/null
+  ) >"$tmp/order-reader-$index.out" 2>&1 &
+  order_reader_pids+=("$!")
+done
+: >"$tmp/order-start"
+for pid in "${order_writer_pids[@]}" "${order_reader_pids[@]}"; do
+  wait "$pid"
+done
+
 if git -C "$repo" grep -nE '(/Users/[[:alnum:]_.-]+/|/home/[[:alnum:]_.-]+/)' -- .; then
   echo 'tracked machine-specific path found' >&2
   exit 1

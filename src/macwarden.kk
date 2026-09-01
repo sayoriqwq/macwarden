@@ -78,8 +78,8 @@ fun entries-in(directory : path, category : string) : <fsys,exn> list<authority-
 
 fun read-authority(root : path) : <fsys,exn> authority
   or-throw(open-authority(
-    entries-in(observations-directory(root), "observations") ++
-    entries-in(transitions-directory(root), "transitions")))
+    entries-in(transitions-directory(root), "transitions") ++
+    entries-in(observations-directory(root), "observations")))
 
 fun selector-path(root : path, selector : string) : exn path
   match selector.starts-with("observations/")
