@@ -109,7 +109,7 @@ fun run-capture(root : path, draft-file : string)
     })
 
 fun show-records(root : path, selectors : list<string>)
-  println(or-throw(show(read-authority(root), selectors)))
+  print(or-throw(show(read-authority(root), selectors)))
 
 val help =
   "usage: macwarden <command> [options]\n\n" ++

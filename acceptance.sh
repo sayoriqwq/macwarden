@@ -64,7 +64,7 @@ make_observation() {
 
 append_record() {
   local bundle=$1 record=$2
-  printf '\n<!-- macwarden:record -->\n\n' >>"$bundle"
+  printf '\n\n<!-- macwarden:record -->\n\n' >>"$bundle"
   cat "$record" >>"$bundle"
 }
 
@@ -75,6 +75,9 @@ make_observation "$tmp/protection-before.md" protection-before hitoolbox-protect
 
 grep -F 'captured:' < <($macwarden capture "$tmp/input-before.md") >/dev/null
 $macwarden capture "$tmp/protection-before.md" >/dev/null
+$macwarden show observations/input-before >"$tmp/shown-input-before.md"
+cmp "$explicit/observations/input-before.md" "$tmp/shown-input-before.md"
+grep -F 'no changes' < <($macwarden capture "$tmp/shown-input-before.md") >/dev/null
 
 sed -e 's|TRANSITION_ID|remove-abc|g' \
     -e 's|BEFORE_OBSERVATION_ID|input-before|g' \

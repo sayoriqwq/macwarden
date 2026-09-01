@@ -64,6 +64,17 @@ pub fun main()
               "show captured Observations") == before-input ++ separator ++ before-protection,
         "canonical Observation bytes changed")
 
+  val newline-input = observation("newline-input", "newline-roundtrip",
+    "Observed with a final newline.", "- enabled\n")
+  val newline-authority = right(open-authority([
+    observation-entry("newline-input", newline-input)]), "open newline Authority")
+  val newline-shown = right(show(newline-authority, ["observations/newline-input"]),
+                            "show newline Observation")
+  check(newline-shown == newline-input, "show changed final newline")
+  check(right(capture(newline-authority, newline-shown),
+              "recapture shown newline Observation").is-empty,
+        "shown canonical bytes were not idempotent capture input")
+
   val after-input = observation("input-after", "macos-input-selection",
     "Read back after the change.", "- ABC absent")
   val after-protection = observation("protection-after", "hitoolbox-protection",

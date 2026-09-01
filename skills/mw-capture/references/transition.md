@@ -16,6 +16,7 @@ CHANGE
 
 - AFTER_OBSERVATION_ID
 
+
 <!-- macwarden:record -->
 
 # Observation: BEFORE_OBSERVATION_ID
@@ -31,6 +32,7 @@ BEFORE_CONTEXT
 ## State
 
 BEFORE_STATE
+
 
 <!-- macwarden:record -->
 

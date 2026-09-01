@@ -206,14 +206,9 @@ fun parse-one(markdown : string) : abort<domain-error> record
 pub fun parse-record(markdown : string) : either<domain-error,record>
   run-result fn() parse-one(markdown)
 
-fun strip-final-newline(source : string) : string
-  match source.ends-with("\n")
-    Just(body) -> body.string
-    Nothing -> source
-
 fun parse-many(markdown : string) : abort<domain-error> list<record>
   ensure(!markdown.trim.is-empty, EmptyCapture)
-  strip-final-newline(markdown).split(record-separator).map(parse-one)
+  markdown.split(record-separator).map(parse-one)
 
 pub fun parse-records(markdown : string) : either<domain-error,list<record>>
   run-result fn() parse-many(markdown)
