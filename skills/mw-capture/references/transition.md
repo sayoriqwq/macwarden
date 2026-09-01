@@ -16,7 +16,6 @@ CHANGE
 
 - AFTER_OBSERVATION_ID
 
-
 <!-- macwarden:record -->
 
 # Observation: BEFORE_OBSERVATION_ID

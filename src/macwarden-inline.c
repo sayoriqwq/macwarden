@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,6 +44,26 @@ static int32_t macwarden_write_new_file(kk_string_t path, kk_string_t content,
   }
   if (err == 0 && link(temporary, target) != 0) err = errno;
   if (temporary != NULL && fd >= 0) unlink(temporary);
+  if (err == 0) {
+    memcpy(temporary, target, (size_t)path_len);
+    temporary[path_len] = '\0';
+    char* slash = strrchr(temporary, '/');
+    if (slash == NULL) {
+      temporary[0] = '.';
+      temporary[1] = '\0';
+    } else if (slash == temporary) {
+      slash[1] = '\0';
+    } else {
+      *slash = '\0';
+    }
+    int directory = open(temporary, O_RDONLY | O_DIRECTORY);
+    if (directory < 0) {
+      err = errno;
+    } else {
+      if (fcntl(directory, F_FULLFSYNC) != 0) err = errno;
+      close(directory);
+    }
+  }
 
   free(temporary);
   kk_string_drop(path, ctx);
