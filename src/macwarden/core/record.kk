@@ -1,7 +1,22 @@
 module macwarden/core/record
 
 import macwarden/core/error
-import macwarden/core/result
+
+effect abort<x>
+  final ctl abort(error : x) : a
+
+fun run-result(action : () -> <abort<x>|e> a) : e either<x,a>
+  handle action
+    return(value) Right(value)
+    final ctl abort(error) Left(error)
+
+fun require-maybe(value : maybe<a>, error : x) : abort<x> a
+  match value
+    Nothing -> abort(error)
+    Just(result) -> result
+
+fun ensure(condition : bool, error : x) : abort<x> ()
+  if !condition then abort(error)
 
 type record-kind
   ObservationKind
