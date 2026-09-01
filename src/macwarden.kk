@@ -14,6 +14,9 @@ extern import
 extern write-new-file(path : string, content : string) : fsys int32
   c inline "macwarden_write_new_file(#1,#2,kk_context())"
 
+extern sync-directory(path : string) : fsys int32
+  c inline "macwarden_sync_directory(#1,kk_context())"
+
 fun or-throw(result : either<domain-error,a>) : exn a
   match result
     Left(err) -> throw(render-error(err))
@@ -93,7 +96,13 @@ fun write-plan(root : path, writes : list<planned-write>) : <fsys,exn> ()
     match write
       PlannedWrite(selector, markdown) ->
         val target = selector-path(root, selector)
-        if write-new-file(target.string, markdown) != 0.int32 then
+        if selector.starts-with("transitions/").is-just &&
+           sync-directory(observations-directory(root).string) != 0.int32 then
+          throw("observations could not be durably synchronized before Transition publication")
+        val result = write-new-file(target.string, markdown)
+        if result == 2.int32 then
+          throw("record was linked but durability could not be confirmed; immutable record may already exist: " ++ selector)
+        elif result != 0.int32 then
           throw("record could not be published without replacement: " ++ selector)
   })
 

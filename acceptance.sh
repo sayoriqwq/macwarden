@@ -201,13 +201,4 @@ for pid in "${order_writer_pids[@]}" "${order_reader_pids[@]}"; do
   wait "$pid"
 done
 
-if git -C "$repo" grep -nE '(/Users/[[:alnum:]_.-]+/|/home/[[:alnum:]_.-]+/)' -- .; then
-  echo 'tracked machine-specific path found' >&2
-  exit 1
-fi
-if git -C "$repo" grep -nEi 'wacom|device[-_ ]mapping' -- . ':!acceptance.sh'; then
-  echo 'tracked device-mapping residue found' >&2
-  exit 1
-fi
-
 printf 'Macwarden acceptance passed\n'

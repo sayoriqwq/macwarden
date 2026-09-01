@@ -5,6 +5,23 @@
 #include <string.h>
 #include <unistd.h>
 
+static int macwarden_sync_directory_path(const char* path) {
+  int directory = open(path, O_RDONLY | O_DIRECTORY);
+  if (directory < 0) return errno;
+  int err = 0;
+  if (fcntl(directory, F_FULLFSYNC) != 0) err = errno;
+  close(directory);
+  return err;
+}
+
+static int32_t macwarden_sync_directory(kk_string_t path, kk_context_t* ctx) {
+  kk_ssize_t path_len;
+  const char* directory = kk_string_cbuf_borrow(path, &path_len, ctx);
+  int32_t result = (int32_t)macwarden_sync_directory_path(directory);
+  kk_string_drop(path, ctx);
+  return result;
+}
+
 static int32_t macwarden_write_new_file(kk_string_t path, kk_string_t content,
                                         kk_context_t* ctx) {
   kk_ssize_t path_len;
@@ -15,6 +32,7 @@ static int32_t macwarden_write_new_file(kk_string_t path, kk_string_t content,
   char* temporary = malloc((size_t)path_len + sizeof(suffix));
   int err = 0;
   int fd = -1;
+  int published = 0;
 
   if (temporary == NULL) {
     err = ENOMEM;
@@ -42,7 +60,10 @@ static int32_t macwarden_write_new_file(kk_string_t path, kk_string_t content,
     if (err == 0 && fsync(fd) != 0) err = errno;
     if (close(fd) != 0 && err == 0) err = errno;
   }
-  if (err == 0 && link(temporary, target) != 0) err = errno;
+  if (err == 0) {
+    if (link(temporary, target) != 0) err = errno;
+    else published = 1;
+  }
   if (temporary != NULL && fd >= 0) unlink(temporary);
   if (err == 0) {
     memcpy(temporary, target, (size_t)path_len);
@@ -56,17 +77,12 @@ static int32_t macwarden_write_new_file(kk_string_t path, kk_string_t content,
     } else {
       *slash = '\0';
     }
-    int directory = open(temporary, O_RDONLY | O_DIRECTORY);
-    if (directory < 0) {
-      err = errno;
-    } else {
-      if (fcntl(directory, F_FULLFSYNC) != 0) err = errno;
-      close(directory);
-    }
+    err = macwarden_sync_directory_path(temporary);
   }
 
   free(temporary);
   kk_string_drop(path, ctx);
   kk_string_drop(content, ctx);
-  return (int32_t)err;
+  if (err == 0) return 0;
+  return published ? 2 : 1;
 }
