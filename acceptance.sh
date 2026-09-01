@@ -42,6 +42,14 @@ test "$explicit" = "$(cd "$tmp/private-authority" && pwd -P)"
   test "$($macwarden path)" = "$explicit"
 )
 
+invalid_record="$explicit/observations/"$'bad\tname.md'
+: >"$invalid_record"
+if "$macwarden" list >/dev/null 2>&1; then
+  echo 'invalid authority record path was silently ignored' >&2
+  exit 1
+fi
+rm "$invalid_record"
+
 observation_template="$repo/skills/mw-capture/references/observation.md"
 transition_template="$repo/skills/mw-capture/references/transition.md"
 

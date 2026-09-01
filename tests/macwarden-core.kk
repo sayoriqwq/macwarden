@@ -34,15 +34,35 @@ fun transition(id : string, before : list<string>, reason : string,
   "\n\n## Change\n\n" ++ change ++
   "\n\n## After\n\n" ++ after.map(fn(ref) { "- " ++ ref }).join("\n")
 
+fun observation-entry(id : string, markdown : string) : authority-entry
+  AuthorityEntry("observations/" ++ id, markdown)
+
+fun write-entry(write : planned-write) : authority-entry
+  match write
+    PlannedWrite(selector, markdown) -> AuthorityEntry(selector, markdown)
+
+fun write-selector(write : planned-write) : string
+  match write
+    PlannedWrite(selector, _) -> selector
+
 pub fun main()
   val before-input = observation("input-before", "macos-input-selection",
     "Observed before the change.", "- ABC enabled")
   val before-protection = observation("protection-before", "hitoolbox-protection",
     "Observed before the change.", "- uchg absent")
-  val existing = right(capture([], before-input ++ separator ++ before-protection),
-                       "standalone Observation capture")
-  check(render-records(existing) == before-input ++ separator ++ before-protection,
-        "Observation parse/render changed canonical bytes")
+  val empty = right(open-authority([]), "empty Authority")
+  val initial-writes = right(capture(empty, before-input ++ separator ++ before-protection),
+                             "standalone Observation capture")
+  check(initial-writes.map(write-selector) ==
+        ["observations/input-before", "observations/protection-before"],
+        "Observation capture plan")
+
+  val initial-entries = initial-writes.map(write-entry)
+  val existing = right(open-authority(initial-entries), "open captured Authority")
+  check(right(show(existing,
+                   ["observations/input-before", "observations/protection-before"]),
+              "show captured Observations") == before-input ++ separator ++ before-protection,
+        "canonical Observation bytes changed")
 
   val after-input = observation("input-after", "macos-input-selection",
     "Read back after the change.", "- ABC absent")
@@ -55,9 +75,19 @@ pub fun main()
   val draft = edge ++ separator ++ before-input ++ separator ++ before-protection ++
               separator ++ after-input ++ separator ++ after-protection
   val additions = right(capture(existing, draft), "multi-Scope Transition capture")
-  check(additions.map(record-selector) ==
-        ["transitions/remove-abc", "observations/input-after", "observations/protection-after"],
-        "capture did not reuse Before Observations or retain all After records")
+  check(additions.map(write-selector) ==
+        ["observations/input-after", "observations/protection-after", "transitions/remove-abc"],
+        "capture plan did not write Observations before the Transition")
+
+  val complete = right(open-authority(initial-entries ++ additions.map(write-entry)),
+                       "open complete Authority")
+  check(authority-selectors(complete) ==
+        ["observations/input-after", "observations/input-before",
+         "observations/protection-after", "observations/protection-before",
+         "transitions/remove-abc"],
+        "Authority selectors are not deterministic")
+  check(right(show(complete, ["transitions/remove-abc"]), "show Transition") == edge,
+        "canonical Transition bytes changed")
 
   expect-error(capture(existing,
     observation("input-before", "macos-input-selection", "Changed evidence.", "- ABC absent")),
@@ -69,12 +99,43 @@ pub fun main()
     "Transition references a missing Observation: missing",
     "dangling Observation reference")
 
-  expect-error(capture([], before-input ++ separator ++ before-input),
+  expect-error(capture(empty, before-input ++ separator ++ before-input),
     "duplicate record in capture draft: observations/input-before",
     "duplicate draft record")
 
-  expect-error(capture([], observation("bad", "scope", "Context", "body\n## State\nforged")),
+  expect-error(capture(empty, observation("bad", "scope", "Context", "body\n## State\nforged")),
     "body contains a reserved structural line",
     "reserved body heading")
+
+  [0.char, 9.char, 127.char].foreach(fn(disallowed) {
+    expect-error(capture(empty, observation("bad" ++ disallowed.string,
+                                           "scope", "Context", "State")),
+      "record ID must be nonblank and file-safe",
+      "control character in record ID")
+  })
+
+  expect-error(open-authority([AuthorityEntry("observations/other", before-input)]),
+    "record identity does not match its path: observations/other",
+    "record path identity")
+
+  expect-error(open-authority([AuthorityEntry("observations/input-before ", before-input)]),
+    "record identity does not match its path: observations/input-before ",
+    "non-canonical authority path")
+
+  expect-error(open-authority([
+    observation-entry("input-before", before-input),
+    observation-entry("input-before", before-input)]),
+    "duplicate authority record: observations/input-before",
+    "duplicate Authority record")
+
+  expect-error(open-authority([
+    AuthorityEntry("transitions/dangling",
+      transition("dangling", ["missing"], "Reason", "Change", ["missing"]))]),
+    "Transition references a missing Observation: missing",
+    "Authority graph closure")
+
+  expect-error(show(existing, ["observations/missing"]),
+    "record does not exist: observations/missing",
+    "missing show selector")
 
   println("Macwarden core checks passed")

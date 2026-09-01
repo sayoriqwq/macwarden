@@ -38,6 +38,8 @@ authority/
 
 现有文件永不覆盖。CLI 先校验整个 draft，再写新的 Observations，最后写 Transitions；因此失败不会留下引用不存在 Observation 的 Transition。Git-backed authority 由 Capture Skill 在 readback 后提交。
 
+`list`、`show` 与 `capture` 都先把目录内容打开为一个经过验证的 Authority：record identity 必须与路径一致、identity 必须唯一、所有 Transition references 必须指向已存在的 Observation。文件系统枚举顺序不影响验证结果。
+
 ## CLI
 
 实时 contract 以程序为准：
@@ -74,14 +76,16 @@ Canonical record 的正文跟随用户语言；中文请求使用中文，ID、�
 
 ## Koka 边界
 
-Production code 只有两个 module：
+Production seam 只有两个 module：
 
 ```text
-src/macwarden/core.kk  pure parse, validate, capture, render
+src/macwarden/core.kk  pure Core façade
 src/macwarden.kk       CLI, configured authority, filesystem adapter
 ```
 
-Core 是唯一 record grammar authority。CLI 直接使用 Koka 标准 filesystem、environment、path、process 与 exception effects。没有 Repository abstraction、第三个 production module、transaction manager、Capture record、semantic index、host mutation 或 recovery program。
+Core 的 implementation 按职责组织在 `src/macwarden/core/`：`record.kk` 只维护单条 record 的领域类型与 canonical grammar；`authority.kk` 维护集合不变量、查询与 append-only capture plan；`error.kk` 定义公开 failure contract；`result.kk` 只提供内部 typed failure flow。它们不形成新的外部 seam，caller 只 import `macwarden/core`。
+
+`Authority` 是 opaque validated value。CLI 只把目录读成 `AuthorityEntry`，并执行 Core 返回的 `PlannedWrite`；它不解析 record，也不自行验证 graph。Core 是唯一 record grammar authority。CLI 直接使用 Koka 标准 filesystem、environment、path、process 与 exception effects。没有 Repository abstraction、第三个 production seam、transaction manager、Capture record、semantic index、host mutation 或 recovery program。
 
 ## Codex 插件
 

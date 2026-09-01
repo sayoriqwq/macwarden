@@ -46,7 +46,7 @@ fun setup(directory : maybe<string>)
   write-text-file(config-file(), authority.string)
   println(authority.string)
 
-fun load-authority()
+fun load-root()
   val config = config-file()
   if !config.is-file then
     throw("Macwarden is not set up; run: macwarden setup [AUTHORITY_DIR]")
@@ -61,74 +61,49 @@ fun load-authority()
     throw("configured authority uses an older layout; run macwarden setup again")
   authority.realpath
 
-fun insert-selector(selector : string, selectors : list<string>) : list<string>
-  match selectors
-    Nil -> [selector]
-    Cons(first, rest) ->
-      if selector <= first then Cons(selector, selectors)
-      else Cons(first, insert-selector(selector, rest))
-
-fun sort-selectors(selectors : list<string>) : list<string>
-  selectors.foldl([], fn(sorted, selector) { insert-selector(selector, sorted) })
-
-fun selectors-in(directory : path, category : string) : <fsys,exn> list<string>
+fun entries-in(directory : path, category : string) : <fsys,exn> list<authority-entry>
   list-directory(directory).filter-map(fn(entry) {
     if !entry.is-file then Nothing
     else match entry.basename.ends-with(".md")
       Just(stem) ->
-        val selector = category ++ "/" ++ stem.string
-        match validate-selector(selector)
-          Right(value) -> Just(value)
-          Left(_) -> Nothing
+        Just(AuthorityEntry(category ++ "/" ++ stem.string, read-text-file(entry)))
       Nothing -> Nothing
   })
 
-fun list-selectors(authority : path) : <fsys,exn> list<string>
-  (selectors-in(observations-directory(authority), "observations") ++
-   selectors-in(transitions-directory(authority), "transitions")).sort-selectors
+fun read-authority(root : path) : <fsys,exn> authority
+  or-throw(open-authority(
+    entries-in(observations-directory(root), "observations") ++
+    entries-in(transitions-directory(root), "transitions")))
 
-fun selector-path(authority : path, source : string) : exn (string,path)
-  val selector = or-throw(validate-selector(source))
+fun selector-path(root : path, selector : string) : exn path
   match selector.starts-with("observations/")
-    Just(id) -> (selector, observations-directory(authority) / (id.string ++ ".md"))
+    Just(id) -> observations-directory(root) / (id.string ++ ".md")
     Nothing -> match selector.starts-with("transitions/")
-      Just(id) -> (selector, transitions-directory(authority) / (id.string ++ ".md"))
+      Just(id) -> transitions-directory(root) / (id.string ++ ".md")
       Nothing -> throw("invalid record selector")
 
-fun read-record(authority : path, source : string) : <fsys,exn> record
-  val (selector, target) = selector-path(authority, source)
-  if !target.is-file then throw("record does not exist: " ++ selector)
-  val value = or-throw(parse-record(read-text-file(target)))
-  if record-selector(value) != selector then
-    throw("record identity does not match its path: " ++ selector)
-  value
-
-fun load-records(authority : path) : <fsys,exn> list<record>
-  list-selectors(authority).map(fn(selector) { read-record(authority, selector) })
-
-fun write-record(authority : path, value : record) : <fsys,exn> ()
-  val (selector, target) = selector-path(authority, record-selector(value))
-  if target.is-file then throw("record appeared while capturing: " ++ selector)
-  write-text-file(target, render-record(value))
-
-fun write-capture(authority : path, records : list<record>) : <fsys,exn> ()
-  records.filter(is-observation).foreach(fn(value) { write-record(authority, value) })
-  records.filter(fn(value) { !is-observation(value) }).foreach(fn(value) {
-    write-record(authority, value)
+fun write-plan(root : path, writes : list<planned-write>) : <fsys,exn> ()
+  writes.foreach(fn(write) {
+    match write
+      PlannedWrite(selector, markdown) ->
+        val target = selector-path(root, selector)
+        if target.is-file then throw("record appeared while capturing: " ++ selector)
+        write-text-file(target, markdown)
   })
 
-fun run-capture(authority : path, draft-file : string)
-  val existing = load-records(authority)
-  val additions = or-throw(capture(existing, read-text-file(draft-file.path)))
-  write-capture(authority, additions)
-  if additions.is-empty then println("no changes")
+fun run-capture(root : path, draft-file : string)
+  val writes = or-throw(capture(read-authority(root), read-text-file(draft-file.path)))
+  write-plan(root, writes)
+  if writes.is-empty then println("no changes")
   else
     println("captured:")
-    additions.foreach(fn(value) { println("  " ++ record-selector(value)) })
+    writes.foreach(fn(write) {
+      match write
+        PlannedWrite(selector, _) -> println("  " ++ selector)
+    })
 
-fun show-records(authority : path, selectors : list<string>)
-  val records = selectors.map(fn(selector) { read-record(authority, selector) })
-  println(render-records(records))
+fun show-records(root : path, selectors : list<string>)
+  println(or-throw(show(read-authority(root), selectors)))
 
 val help =
   "usage: macwarden <command> [options]\n\n" ++
@@ -145,19 +120,19 @@ val capture-help =
   "The draft is one or more canonical Observation or Transition records.\n" ++
   "All records are validated before immutable Observations are written, then Transitions."
 
-fun dispatch(authority : path, command : string, arguments : list<string>)
+fun dispatch(root : path, command : string, arguments : list<string>)
   match command
     "path" ->
       if !arguments.is-empty then throw("path accepts no arguments")
-      println(authority.string)
+      println(root.string)
     "list" ->
       if !arguments.is-empty then throw("list accepts no arguments")
-      list-selectors(authority).foreach(fn(selector) { println(selector) })
+      authority-selectors(read-authority(root)).foreach(fn(selector) { println(selector) })
     "show" ->
       if arguments.is-empty then throw("show requires at least one record selector")
-      show-records(authority, arguments)
+      show-records(root, arguments)
     "capture" -> match arguments
-      [draft-file] -> run-capture(authority, draft-file)
+      [draft-file] -> run-capture(root, draft-file)
       _ -> throw("capture requires exactly one draft file; run: macwarden capture --help")
     _ -> throw("unknown command: " ++ command ++ "; run: macwarden --help")
 
@@ -176,7 +151,7 @@ fun run()
     ["setup"] -> setup(Nothing)
     ["setup", directory] -> setup(Just(directory))
     Cons("setup", _) -> throw("setup accepts at most one AUTHORITY_DIR")
-    Cons(command, arguments) -> dispatch(load-authority(), command, arguments)
+    Cons(command, arguments) -> dispatch(load-root(), command, arguments)
 
 pub fun main()
   with catch fn(exn)
