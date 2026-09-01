@@ -42,6 +42,39 @@ test "$explicit" = "$(cd "$tmp/private-authority" && pwd -P)"
   test "$($macwarden path)" = "$explicit"
 )
 
+mkdir -p "$tmp/legacy-authority"
+printf '%s' $'# Scope: keyboard\n\n## State\n\n- ABC enabled\n\n## Transition\n\nRemoved ABC.\n\n## State\n\n- ABC absent' \
+  >"$tmp/legacy-authority/keyboard.md"
+cp "$tmp/legacy-authority/keyboard.md" "$tmp/legacy-original.md"
+legacy=$($macwarden setup "$tmp/legacy-authority")
+test -d "$legacy/observations"
+test -d "$legacy/transitions"
+printf '%s\n' \
+  observations/keyboard-legacy-observation-1 \
+  observations/keyboard-legacy-observation-2 \
+  transitions/keyboard-legacy-transition-1 >"$tmp/legacy-expected-list"
+$macwarden list >"$tmp/legacy-actual-list"
+cmp "$tmp/legacy-expected-list" "$tmp/legacy-actual-list"
+$macwarden show transitions/keyboard-legacy-transition-1 >"$tmp/legacy-transition"
+grep -F 'Removed ABC.' "$tmp/legacy-transition" >/dev/null
+grep -F 'the original format did not record Change separately' "$tmp/legacy-transition" >/dev/null
+cmp "$tmp/legacy-original.md" "$legacy/keyboard.md"
+cp "$legacy/observations/keyboard-legacy-observation-1.md" "$tmp/legacy-before-retry.md"
+$macwarden setup "$legacy" >/dev/null
+cmp "$tmp/legacy-before-retry.md" "$legacy/observations/keyboard-legacy-observation-1.md"
+
+mkdir -p "$tmp/bad-legacy-authority"
+printf '%s' '# Scope: wrong' >"$tmp/bad-legacy-authority/broken.md"
+cp "$tmp/bad-legacy-authority/broken.md" "$tmp/bad-legacy-original.md"
+if "$macwarden" setup "$tmp/bad-legacy-authority" >/dev/null 2>&1; then
+  echo 'malformed legacy authority was configured' >&2
+  exit 1
+fi
+cmp "$tmp/bad-legacy-original.md" "$tmp/bad-legacy-authority/broken.md"
+test "$(<"$HOME/.config/macwarden/scopes-dir")" = "$legacy"
+
+$macwarden setup "$explicit" >/dev/null
+
 invalid_record="$explicit/observations/"$'bad\tname.md'
 : >"$invalid_record"
 if "$macwarden" list >/dev/null 2>&1; then
@@ -145,9 +178,26 @@ test ! -e "$explicit/transitions/dangling.md"
 
 grep -F 'no changes' < <($macwarden capture "$tmp/input-before.md") >/dev/null
 
-test ! -e "$repo/src/scopelog.kk"
-test ! -e "$repo/src/scopelog/core.kk"
-test ! -e "$repo/tests/scopelog-core.kk"
+race_pids=()
+for index in 1 2 3 4 5 6 7 8; do
+  make_observation "$tmp/race-$index.md" concurrent-record concurrency \
+    "Concurrent capture $index." "- winner: $index"
+  (
+    while [[ ! -e "$tmp/race-start" ]]; do :; done
+    "$macwarden" capture "$tmp/race-$index.md"
+  ) >"$tmp/race-$index.out" 2>&1 &
+  race_pids+=("$!")
+done
+: >"$tmp/race-start"
+race_successes=0
+for pid in "${race_pids[@]}"; do
+  if wait "$pid"; then
+    race_successes=$((race_successes + 1))
+  fi
+done
+test "$race_successes" = 1
+$macwarden show observations/concurrent-record >"$tmp/race-winner.md"
+test "$(grep -c '^# Observation: concurrent-record$' "$tmp/race-winner.md")" = 1
 
 if git -C "$repo" grep -nE '(/Users/[[:alnum:]_.-]+/|/home/[[:alnum:]_.-]+/)' -- .; then
   echo 'tracked machine-specific path found' >&2

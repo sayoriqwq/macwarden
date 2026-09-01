@@ -19,6 +19,8 @@ pub type domain-error
   RecordIdentityMismatch(selector : string)
   MissingRecord(selector : string)
   MissingObservation(id : string)
+  MalformedLegacyScopeLog(scope : string)
+  LegacyScopeMismatch(scope : string)
 
 pub fun render-error(err : domain-error) : string
   match err
@@ -40,3 +42,5 @@ pub fun render-error(err : domain-error) : string
     RecordIdentityMismatch(selector) -> "record identity does not match its path: " ++ selector
     MissingRecord(selector) -> "record does not exist: " ++ selector
     MissingObservation(id) -> "Transition references a missing Observation: " ++ id
+    MalformedLegacyScopeLog(scope) -> "malformed legacy ScopeLog: " ++ scope
+    LegacyScopeMismatch(scope) -> "legacy ScopeLog identity does not match its path: " ++ scope

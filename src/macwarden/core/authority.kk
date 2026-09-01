@@ -8,6 +8,9 @@ import std/core/undiv
 pub type authority-entry
   AuthorityEntry(selector : string, markdown : string)
 
+pub type legacy-authority-entry
+  LegacyAuthorityEntry(scope : string, markdown : string)
+
 pub type planned-write
   PlannedWrite(selector : string, markdown : string)
 
@@ -96,6 +99,66 @@ fun plan-writes(records : list<record>) : list<planned-write>
   (observations ++ transitions).map(fn(value) {
     PlannedWrite(record-selector(value), render-record(value))
   })
+
+val legacy-state-heading = "\n\n## State\n\n"
+val legacy-transition-heading = "\n\n## Transition\n\n"
+
+fun legacy-observation-id(scope : string, index : int) : string
+  scope ++ "-legacy-observation-" ++ (index + 1).show
+
+fun legacy-transition-id(scope : string, index : int) : string
+  scope ++ "-legacy-transition-" ++ (index + 1).show
+
+fun legacy-observation(scope : string, index : int, state : string)
+                       : abort<domain-error> record
+  val markdown =
+    "# Observation: " ++ legacy-observation-id(scope, index) ++
+    "\n\n## Scope\n\n" ++ scope ++
+    "\n\n## Context\n\nMigrated from legacy ScopeLog " ++ scope ++
+    ".md; original observation context was not recorded." ++
+    "\n\n## State\n\n" ++ state
+  val value = require(parse-record(markdown))
+  ensure(render-record(value) == markdown, InvalidScopeId)
+  value
+
+fun legacy-transition(scope : string, index : int, reason : string)
+                      : abort<domain-error> record
+  require(parse-record(
+    "# Transition: " ++ legacy-transition-id(scope, index) ++
+    "\n\n## Before\n\n- " ++ legacy-observation-id(scope, index) ++
+    "\n\n## Reason\n\n" ++ reason ++
+    "\n\n## Change\n\nMigrated from legacy ScopeLog; the original format did not record Change separately." ++
+    "\n\n## After\n\n- " ++ legacy-observation-id(scope, index + 1)))
+
+fun parse-legacy-chain(scope : string, parts : list<string>, index : int)
+                       : abort<domain-error> list<record>
+  match parts
+    Cons(last, Nil) -> [legacy-observation(scope, index, last)]
+    Cons(section, rest) -> match section.split(legacy-transition-heading)
+      [state, reason] ->
+        Cons(legacy-observation(scope, index, state),
+          Cons(legacy-transition(scope, index, reason),
+               parse-legacy-chain(scope, rest, index + 1)))
+      _ -> abort(MalformedLegacyScopeLog(scope))
+    Nil -> abort(MalformedLegacyScopeLog(scope))
+
+fun parse-legacy-entry(entry : legacy-authority-entry)
+                       : abort<domain-error> list<record>
+  match entry
+    LegacyAuthorityEntry(scope, markdown) -> match markdown.split(legacy-state-heading)
+      Cons(header, Cons(first, rest)) ->
+        ensure(header == "# Scope: " ++ scope, LegacyScopeMismatch(scope))
+        parse-legacy-chain(scope, Cons(first, rest), 0)
+      _ -> abort(MalformedLegacyScopeLog(scope))
+
+pub fun upgrade-legacy(source : authority, entries : list<legacy-authority-entry>)
+                       : either<domain-error,list<planned-write>>
+  run-result fn()
+    val Authority(existing) = source
+    val proposed = entries.flatmap(parse-legacy-entry)
+    validate-unique(proposed, DuplicateRecord)
+    validate-graph(existing ++ proposed)
+    plan-writes(select-additions(existing, proposed))
 
 pub fun capture(source : authority, draft : string)
                 : either<domain-error,list<planned-write>>

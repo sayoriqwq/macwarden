@@ -8,6 +8,12 @@ import std/os/file
 import std/os/path
 import std/os/process
 
+extern import
+  c file "macwarden-inline.c"
+
+extern write-new-file(path : string, content : string) : fsys int32
+  c inline "macwarden_write_new_file(#1,#2,kk_context())"
+
 fun or-throw(result : either<domain-error,a>) : exn a
   match result
     Left(err) -> throw(render-error(err))
@@ -43,6 +49,7 @@ fun setup(directory : maybe<string>)
     Nothing -> default-authority().realpath
   ensure-authority(selected)
   val authority = selected.realpath
+  upgrade-legacy-authority(authority)
   write-text-file(config-file(), authority.string)
   println(authority.string)
 
@@ -59,7 +66,11 @@ fun load-root()
   if !observations-directory(authority).is-directory ||
      !transitions-directory(authority).is-directory then
     throw("configured authority uses an older layout; run macwarden setup again")
-  authority.realpath
+  val root = authority.realpath
+  val legacy = legacy-entries-in(root)
+  if !legacy.is-empty && !or-throw(upgrade-legacy(read-authority(root), legacy)).is-empty then
+    throw("configured authority upgrade is incomplete; run macwarden setup again")
+  root
 
 fun entries-in(directory : path, category : string) : <fsys,exn> list<authority-entry>
   list-directory(directory).filter-map(fn(entry) {
@@ -75,6 +86,14 @@ fun read-authority(root : path) : <fsys,exn> authority
     entries-in(observations-directory(root), "observations") ++
     entries-in(transitions-directory(root), "transitions")))
 
+fun legacy-entries-in(root : path) : <fsys,exn> list<legacy-authority-entry>
+  list-directory(root).filter-map(fn(entry) {
+    if !entry.is-file then Nothing
+    else match entry.basename.ends-with(".md")
+      Just(stem) -> Just(LegacyAuthorityEntry(stem.string, read-text-file(entry)))
+      Nothing -> Nothing
+  })
+
 fun selector-path(root : path, selector : string) : exn path
   match selector.starts-with("observations/")
     Just(id) -> observations-directory(root) / (id.string ++ ".md")
@@ -87,9 +106,19 @@ fun write-plan(root : path, writes : list<planned-write>) : <fsys,exn> ()
     match write
       PlannedWrite(selector, markdown) ->
         val target = selector-path(root, selector)
-        if target.is-file then throw("record appeared while capturing: " ++ selector)
-        write-text-file(target, markdown)
+        if write-new-file(target.string, markdown) != 0.int32 then
+          throw("record could not be published without replacement: " ++ selector)
   })
+
+fun upgrade-legacy-authority(root : path) : <fsys,exn> ()
+  val legacy = legacy-entries-in(root)
+  if !legacy.is-empty then
+    val writes = match upgrade-legacy(read-authority(root), legacy)
+      Left(err) -> throw("legacy authority upgrade failed: " ++ render-error(err))
+      Right(plan) -> plan
+    write-plan(root, writes)
+    if !or-throw(upgrade-legacy(read-authority(root), legacy)).is-empty then
+      throw("legacy authority upgrade verification failed")
 
 fun run-capture(root : path, draft-file : string)
   val writes = or-throw(capture(read-authority(root), read-text-file(draft-file.path)))
