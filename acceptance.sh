@@ -42,36 +42,33 @@ test "$explicit" = "$(cd "$tmp/private-authority" && pwd -P)"
   test "$($macwarden path)" = "$explicit"
 )
 
-mkdir -p "$tmp/legacy-authority"
-printf '%s' $'# Scope: keyboard\n\n## State\n\n- ABC enabled\n\n## Transition\n\nRemoved ABC.\n\n## State\n\n- ABC absent' \
-  >"$tmp/legacy-authority/keyboard.md"
-cp "$tmp/legacy-authority/keyboard.md" "$tmp/legacy-original.md"
-legacy=$($macwarden setup "$tmp/legacy-authority")
+mkdir -p "$tmp/legacy-authority/archive"
+printf '%s' '# Scope: keyboard' >"$tmp/legacy-authority/keyboard.md"
+printf '%s' '# Scope: trackpad' >"$tmp/legacy-authority/trackpad.md"
+printf '%s' 'keep' >"$tmp/legacy-authority/keep.txt"
+printf '%s' '# Scope: archived' >"$tmp/legacy-authority/archive/archived.md"
+legacy=$(cd "$tmp/legacy-authority" && pwd -P)
+printf '%s' "$legacy" >"$HOME/.config/macwarden/scopes-dir"
+clean_output=$(cd "$tmp/project/nested" && "$macwarden" setup)
+grep -F 'cleared legacy ScopeLog records: 2' <<<"$clean_output" >/dev/null
+test "$(tail -n 1 <<<"$clean_output")" = "$legacy"
+test "$(<"$HOME/.config/macwarden/scopes-dir")" = "$legacy"
+test ! -e "$legacy/keyboard.md"
+test ! -e "$legacy/trackpad.md"
+test -f "$legacy/keep.txt"
+test -f "$legacy/archive/archived.md"
 test -d "$legacy/observations"
 test -d "$legacy/transitions"
-printf '%s\n' \
-  observations/keyboard-legacy-observation-1 \
-  observations/keyboard-legacy-observation-2 \
-  transitions/keyboard-legacy-transition-1 >"$tmp/legacy-expected-list"
-$macwarden list >"$tmp/legacy-actual-list"
-cmp "$tmp/legacy-expected-list" "$tmp/legacy-actual-list"
-$macwarden show transitions/keyboard-legacy-transition-1 >"$tmp/legacy-transition"
-grep -F 'Removed ABC.' "$tmp/legacy-transition" >/dev/null
-grep -F 'the original format did not record Change separately' "$tmp/legacy-transition" >/dev/null
-cmp "$tmp/legacy-original.md" "$legacy/keyboard.md"
-cp "$legacy/observations/keyboard-legacy-observation-1.md" "$tmp/legacy-before-retry.md"
-$macwarden setup "$legacy" >/dev/null
-cmp "$tmp/legacy-before-retry.md" "$legacy/observations/keyboard-legacy-observation-1.md"
+test -z "$($macwarden list)"
 
-mkdir -p "$tmp/bad-legacy-authority"
-printf '%s' '# Scope: wrong' >"$tmp/bad-legacy-authority/broken.md"
-cp "$tmp/bad-legacy-authority/broken.md" "$tmp/bad-legacy-original.md"
-if "$macwarden" setup "$tmp/bad-legacy-authority" >/dev/null 2>&1; then
-  echo 'malformed legacy authority was configured' >&2
-  exit 1
-fi
-cmp "$tmp/bad-legacy-original.md" "$tmp/bad-legacy-authority/broken.md"
-test "$(<"$HOME/.config/macwarden/scopes-dir")" = "$legacy"
+mkdir -p "$tmp/explicit-legacy"
+printf '%s' '# Scope: explicit' >"$tmp/explicit-legacy/explicit.md"
+explicit_clean_output=$($macwarden setup "$tmp/explicit-legacy")
+grep -F 'cleared legacy ScopeLog records: 1' <<<"$explicit_clean_output" >/dev/null
+test "$(tail -n 1 <<<"$explicit_clean_output")" = "$(cd "$tmp/explicit-legacy" && pwd -P)"
+test ! -e "$tmp/explicit-legacy/explicit.md"
+test -d "$tmp/explicit-legacy/observations"
+test -d "$tmp/explicit-legacy/transitions"
 
 $macwarden setup "$explicit" >/dev/null
 

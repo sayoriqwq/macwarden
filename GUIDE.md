@@ -38,7 +38,7 @@ authority/
 
 现有文件永不覆盖。CLI 先校验整个 draft，再写新的 Observations，最后写 Transitions；因此失败不会留下引用不存在 Observation 的 Transition。Git-backed authority 由 Capture Skill 在 readback 后提交。
 
-旧版 authority 根目录中的 `<scope>.md` ScopeLog 会在 `setup` 时升级：每个 State 变为 `<scope>-legacy-observation-N`，每条旧 Transition 变为 `<scope>-legacy-transition-N`。Core 先完整转换并验证，再以 no-replace 方式写入 canonical 目录；旧 ScopeLog 原文件保留。转换、冲突或写入失败时不会更新配置，也不会删除旧数据，修正问题后可重试 `setup`。
+旧版 authority 采用明确的 clean-start：`setup` 删除该目录根部的旧 `<scope>.md` ScopeLog，保留其他文件与子目录，再创建 `observations/` 与 `transitions/`。bare `setup` 会优先处理当前已配置的旧目录，不会切换到 Git 根目录的新空目录；输出会明确已清除的旧记录数量。旧 ScopeLog 不迁移。
 
 `list`、`show` 与 `capture` 都先把目录内容打开为一个经过验证的 Authority：record identity 必须与路径一致、identity 必须唯一、所有 Transition references 必须指向已存在的 Observation。文件系统枚举顺序不影响验证结果。
 

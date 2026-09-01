@@ -14,6 +14,9 @@ extern import
 extern write-new-file(path : string, content : string) : fsys int32
   c inline "macwarden_write_new_file(#1,#2,kk_context())"
 
+extern remove-file(path : string) : fsys int32
+  c inline "macwarden_remove_file(#1,kk_context())"
+
 fun or-throw(result : either<domain-error,a>) : exn a
   match result
     Left(err) -> throw(render-error(err))
@@ -43,14 +46,44 @@ fun ensure-authority(authority : path) : <fsys,exn> ()
   ensure-dir(observations-directory(authority))
   ensure-dir(transitions-directory(authority))
 
+fun legacy-record-paths(root : path) : <fsys,exn> list<path>
+  list-directory(root).filter(fn(entry) {
+    entry.is-file && entry.basename.ends-with(".md").is-just
+  })
+
+fun uses-legacy-layout(root : path) : <fsys,exn> bool
+  !observations-directory(root).is-directory ||
+  !transitions-directory(root).is-directory ||
+  !legacy-record-paths(root).is-empty
+
+fun configured-legacy-authority()
+  val config = config-file()
+  if !config.is-file then Nothing
+  else
+    val configured = read-text-file(config)
+    if configured.is-empty then Nothing
+    else
+      val root = configured.path
+      if root.is-directory && uses-legacy-layout(root) then Just(root.realpath)
+      else Nothing
+
 fun setup(directory : maybe<string>)
   val selected = match directory
     Just(value) -> value.realpath
-    Nothing -> default-authority().realpath
-  ensure-authority(selected)
+    Nothing -> match configured-legacy-authority()
+      Just(configured) -> configured
+      Nothing -> default-authority().realpath
+  ensure-dir(selected)
   val authority = selected.realpath
-  upgrade-legacy-authority(authority)
+  val legacy = legacy-record-paths(authority)
+  legacy.foreach(fn(record) {
+    if remove-file(record.string) != 0.int32 then
+      throw("unable to clear legacy ScopeLog record: " ++ record.string)
+  })
+  ensure-authority(authority)
   write-text-file(config-file(), authority.string)
+  if !legacy.is-empty then
+    println("cleared legacy ScopeLog records: " ++ legacy.length.show)
   println(authority.string)
 
 fun load-root()
@@ -63,14 +96,9 @@ fun load-root()
   val authority = configured.path
   if !authority.is-directory then
     throw("configured authority is unavailable; run: macwarden setup [AUTHORITY_DIR]")
-  if !observations-directory(authority).is-directory ||
-     !transitions-directory(authority).is-directory then
+  if uses-legacy-layout(authority) then
     throw("configured authority uses an older layout; run macwarden setup again")
-  val root = authority.realpath
-  val legacy = legacy-entries-in(root)
-  if !legacy.is-empty && !or-throw(upgrade-legacy(read-authority(root), legacy)).is-empty then
-    throw("configured authority upgrade is incomplete; run macwarden setup again")
-  root
+  authority.realpath
 
 fun entries-in(directory : path, category : string) : <fsys,exn> list<authority-entry>
   list-directory(directory).filter-map(fn(entry) {
@@ -85,14 +113,6 @@ fun read-authority(root : path) : <fsys,exn> authority
   or-throw(open-authority(
     entries-in(observations-directory(root), "observations") ++
     entries-in(transitions-directory(root), "transitions")))
-
-fun legacy-entries-in(root : path) : <fsys,exn> list<legacy-authority-entry>
-  list-directory(root).filter-map(fn(entry) {
-    if !entry.is-file then Nothing
-    else match entry.basename.ends-with(".md")
-      Just(stem) -> Just(LegacyAuthorityEntry(stem.string, read-text-file(entry)))
-      Nothing -> Nothing
-  })
 
 fun selector-path(root : path, selector : string) : exn path
   match selector.starts-with("observations/")
@@ -109,16 +129,6 @@ fun write-plan(root : path, writes : list<planned-write>) : <fsys,exn> ()
         if write-new-file(target.string, markdown) != 0.int32 then
           throw("record could not be published without replacement: " ++ selector)
   })
-
-fun upgrade-legacy-authority(root : path) : <fsys,exn> ()
-  val legacy = legacy-entries-in(root)
-  if !legacy.is-empty then
-    val writes = match upgrade-legacy(read-authority(root), legacy)
-      Left(err) -> throw("legacy authority upgrade failed: " ++ render-error(err))
-      Right(plan) -> plan
-    write-plan(root, writes)
-    if !or-throw(upgrade-legacy(read-authority(root), legacy)).is-empty then
-      throw("legacy authority upgrade verification failed")
 
 fun run-capture(root : path, draft-file : string)
   val writes = or-throw(capture(read-authority(root), read-text-file(draft-file.path)))

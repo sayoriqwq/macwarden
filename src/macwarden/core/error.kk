@@ -17,10 +17,9 @@ pub type domain-error
   DuplicateAuthorityRecord(selector : string)
   RecordConflict(selector : string)
   RecordIdentityMismatch(selector : string)
+  NonCanonicalRecord(selector : string)
   MissingRecord(selector : string)
   MissingObservation(id : string)
-  MalformedLegacyScopeLog(scope : string)
-  LegacyScopeMismatch(scope : string)
 
 pub fun render-error(err : domain-error) : string
   match err
@@ -40,7 +39,6 @@ pub fun render-error(err : domain-error) : string
     DuplicateAuthorityRecord(selector) -> "duplicate authority record: " ++ selector
     RecordConflict(selector) -> "append-only record conflict: " ++ selector
     RecordIdentityMismatch(selector) -> "record identity does not match its path: " ++ selector
+    NonCanonicalRecord(selector) -> "persisted record is not canonical: " ++ selector
     MissingRecord(selector) -> "record does not exist: " ++ selector
     MissingObservation(id) -> "Transition references a missing Observation: " ++ id
-    MalformedLegacyScopeLog(scope) -> "malformed legacy ScopeLog: " ++ scope
-    LegacyScopeMismatch(scope) -> "legacy ScopeLog identity does not match its path: " ++ scope

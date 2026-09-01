@@ -122,6 +122,12 @@ pub fun main()
     "record identity does not match its path: observations/input-before ",
     "non-canonical authority path")
 
+  expect-error(open-authority([AuthorityEntry("observations/input-before",
+    observation("input-before ", "macos-input-selection",
+                "Observed before the change.", "- ABC enabled"))]),
+    "persisted record is not canonical: observations/input-before",
+    "non-canonical persisted bytes")
+
   expect-error(open-authority([
     observation-entry("input-before", before-input),
     observation-entry("input-before", before-input)]),
@@ -137,36 +143,5 @@ pub fun main()
   expect-error(show(existing, ["observations/missing"]),
     "record does not exist: observations/missing",
     "missing show selector")
-
-  val legacy = "# Scope: keyboard\n\n## State\n\n- ABC enabled" ++
-               "\n\n## Transition\n\nRemoved ABC.\n\n## State\n\n- ABC absent"
-  val legacy-entry = LegacyAuthorityEntry("keyboard", legacy)
-  val legacy-writes = right(upgrade-legacy(empty, [legacy-entry]), "legacy ScopeLog upgrade")
-  check(legacy-writes.map(write-selector) ==
-        ["observations/keyboard-legacy-observation-1",
-         "observations/keyboard-legacy-observation-2",
-         "transitions/keyboard-legacy-transition-1"],
-        "legacy upgrade plan")
-  val upgraded = right(open-authority(legacy-writes.map(write-entry)),
-                       "open upgraded legacy Authority")
-  check(right(show(upgraded, ["observations/keyboard-legacy-observation-1"]),
-              "show upgraded Observation") ==
-        observation("keyboard-legacy-observation-1", "keyboard",
-          "Migrated from legacy ScopeLog keyboard.md; original observation context was not recorded.",
-          "- ABC enabled"),
-        "legacy State was not preserved")
-  check(right(show(upgraded, ["transitions/keyboard-legacy-transition-1"]),
-              "show upgraded Transition") ==
-        transition("keyboard-legacy-transition-1",
-          ["keyboard-legacy-observation-1"], "Removed ABC.",
-          "Migrated from legacy ScopeLog; the original format did not record Change separately.",
-          ["keyboard-legacy-observation-2"]),
-        "legacy Transition was not preserved")
-  check(right(upgrade-legacy(upgraded, [legacy-entry]),
-              "repeat legacy upgrade").is-empty,
-        "legacy upgrade was not idempotent")
-  expect-error(upgrade-legacy(empty, [LegacyAuthorityEntry("other", legacy)]),
-    "legacy ScopeLog identity does not match its path: other",
-    "legacy ScopeLog path identity")
 
   println("Macwarden core checks passed")
