@@ -1,22 +1,20 @@
 ---
 name: mw-capture
-description: 'Use when a user request begins with "mw: capture", or when the `mw-recall` Skill invokes verified-transition closure, to distill current context into the authoritative Macwarden ScopeLog.'
+description: 'Use when a request begins with "mw: capture", or when `mw-recall` closes verified host work, to append evidence-backed Observations and Transitions to Macwarden.'
 ---
 
 # Macwarden capture
 
-`mw: capture` is authority to write Macwarden from the current task or conversation.
+`mw: capture` authorizes writes to Macwarden for the current task or conversation.
 
 ## Process
 
-1. **Establish authority.** Run `macwarden path`. If setup is missing, return its setup instruction and stop. Read `macwarden capture --help` before constructing the write. **Complete when:** the authority path is known and the current capture contract is loaded.
+1. **Establish authority.** Run `macwarden path`, read `macwarden capture --help`, then use `macwarden list` and the smallest necessary `macwarden show` calls. Stop on unexplained Git changes in the affected authority paths. **Complete when:** the authority and relevant existing records are known.
 
-2. **Select the Scope.** Treat suffix text after `mw: capture` as a scope hint and inspect that ScopeLog first when it exists. Without a hint, run `macwarden list`, choose from the stable IDs, and use `macwarden show` only on the smallest plausible logs. Choose a stable business question rather than a task or component list. **Complete when:** one exact existing Scope ID or one stable new ID accounts for the context.
+2. **Distill evidence.** An Observation contains one stable Scope, Context that attributes when and how the observation was established, and readback-confirmed State facts. Mark unsupported facts `unknown`; distinguish observed, reported, sourced, and inferred claims in Context. A Transition records one Reason, the actual Change, and Before/After Observation IDs. After contains only observations established or changed by that Transition; simultaneous facts with unknown causality are standalone Observations. Reuse an existing Before record with unchanged canonical content. Without trustworthy Before evidence, capture only the new Observation. **Complete when:** every State is factual, every important assertion is attributed, and the Transition can cross all affected Scopes without inventing causality.
 
-3. **Distill current evidence.** Bound evidence to the current task or conversation. Produce a self-contained current State and, for an existing Scope, one nonblank core Reason. For a new Scope, preserve a trustworthy Before State plus Reason plus After State when all three are available; otherwise record only the current State. Ask only when missing or conflicting evidence would materially change the Scope or recorded truth. **Complete when:** every body is supported by available context and the State stands alone for a later reader.
+3. **Build one draft.** Copy [observation.md](references/observation.md) for standalone evidence or [transition.md](references/transition.md) for a change. Patch every placeholder. Write Context, State, Reason, and Change in the user's language; preserve IDs, paths, commands, option names, and quoted source text verbatim. For additional Scopes, repeat the same Observation record block and add its ID to Before or After. Do not introduce another schema. **Complete when:** one draft contains every required canonical record and no placeholder remains.
 
-4. **Capture and verify.** Write the selected bodies to temporary Markdown files, invoke `macwarden capture` according to the help just read, then read the affected log with `macwarden show`. Limit changes to temporary inputs and the configured ScopeLog. **Complete when:** the canonical log contains the intended current State; otherwise report the mismatch without claiming success.
+4. **Capture and verify.** Run `macwarden capture <draft.md>`, then `macwarden show` every returned selector. If capture reports that an immutable record may already exist, show that selector before retrying. If the authority is Git-backed, commit only the new records after verification and confirm those paths are clean; otherwise report that no version history exists. **Complete when:** canonical records match the evidence and the write is committed or explicitly reported unversioned.
 
-5. **Report.** Return the Scope identity, whether it was initialized or appended, and a concise statement of the recorded current State. The process is complete only at the verification criterion above.
-
-The evidence boundary excludes old-conversation scans and external research. Host changes require their own explicit instruction; this Skill records context rather than creating host state.
+Return the new Observation and Transition selectors plus a concise statement of what was recorded. Do not search old conversations. Host mutation requires its own explicit instruction.

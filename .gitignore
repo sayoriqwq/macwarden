@@ -1,3 +1,4 @@
 .koka/
-macwarden
+/macwarden
+/authority/
 /scopes/

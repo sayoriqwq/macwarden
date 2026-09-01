@@ -1,6 +1,6 @@
 ## Authority
 
-Read `GUIDE.md` before changing the ScopeLog model, canonical grammar, CLI contract, Koka module boundary, or Codex plugin.
+Read `CONTEXT.md` for domain terms and `GUIDE.md` for the canonical grammar, CLI contract, Koka module boundary, and Codex plugin workflow before changing them.
 
 ## Validation
 
