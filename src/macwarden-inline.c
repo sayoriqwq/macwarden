@@ -42,17 +42,10 @@ static int32_t macwarden_write_new_file(kk_string_t path, kk_string_t content,
     if (close(fd) != 0 && err == 0) err = errno;
   }
   if (err == 0 && link(temporary, target) != 0) err = errno;
-  if (temporary != NULL && fd >= 0 && unlink(temporary) != 0 && err == 0) err = errno;
+  if (temporary != NULL && fd >= 0) unlink(temporary);
 
   free(temporary);
   kk_string_drop(path, ctx);
   kk_string_drop(content, ctx);
-  return (int32_t)err;
-}
-
-static int32_t macwarden_remove_file(kk_string_t path, kk_context_t* ctx) {
-  const char* target = kk_string_cbuf_borrow(path, NULL, ctx);
-  int err = unlink(target) == 0 ? 0 : errno;
-  kk_string_drop(path, ctx);
   return (int32_t)err;
 }

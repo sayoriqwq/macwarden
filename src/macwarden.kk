@@ -14,9 +14,6 @@ extern import
 extern write-new-file(path : string, content : string) : fsys int32
   c inline "macwarden_write_new_file(#1,#2,kk_context())"
 
-extern remove-file(path : string) : fsys int32
-  c inline "macwarden_remove_file(#1,kk_context())"
-
 fun or-throw(result : either<domain-error,a>) : exn a
   match result
     Left(err) -> throw(render-error(err))
@@ -46,44 +43,13 @@ fun ensure-authority(authority : path) : <fsys,exn> ()
   ensure-dir(observations-directory(authority))
   ensure-dir(transitions-directory(authority))
 
-fun legacy-record-paths(root : path) : <fsys,exn> list<path>
-  list-directory(root).filter(fn(entry) {
-    entry.is-file && entry.basename.ends-with(".md").is-just
-  })
-
-fun uses-legacy-layout(root : path) : <fsys,exn> bool
-  !observations-directory(root).is-directory ||
-  !transitions-directory(root).is-directory ||
-  !legacy-record-paths(root).is-empty
-
-fun configured-legacy-authority()
-  val config = config-file()
-  if !config.is-file then Nothing
-  else
-    val configured = read-text-file(config)
-    if configured.is-empty then Nothing
-    else
-      val root = configured.path
-      if root.is-directory && uses-legacy-layout(root) then Just(root.realpath)
-      else Nothing
-
 fun setup(directory : maybe<string>)
   val selected = match directory
     Just(value) -> value.realpath
-    Nothing -> match configured-legacy-authority()
-      Just(configured) -> configured
-      Nothing -> default-authority().realpath
-  ensure-dir(selected)
+    Nothing -> default-authority().realpath
+  ensure-authority(selected)
   val authority = selected.realpath
-  val legacy = legacy-record-paths(authority)
-  legacy.foreach(fn(record) {
-    if remove-file(record.string) != 0.int32 then
-      throw("unable to clear legacy ScopeLog record: " ++ record.string)
-  })
-  ensure-authority(authority)
   write-text-file(config-file(), authority.string)
-  if !legacy.is-empty then
-    println("cleared legacy ScopeLog records: " ++ legacy.length.show)
   println(authority.string)
 
 fun load-root()
@@ -96,8 +62,9 @@ fun load-root()
   val authority = configured.path
   if !authority.is-directory then
     throw("configured authority is unavailable; run: macwarden setup [AUTHORITY_DIR]")
-  if uses-legacy-layout(authority) then
-    throw("configured authority uses an older layout; run macwarden setup again")
+  if !observations-directory(authority).is-directory ||
+     !transitions-directory(authority).is-directory then
+    throw("configured authority is incomplete; run: macwarden setup [AUTHORITY_DIR]")
   authority.realpath
 
 fun entries-in(directory : path, category : string) : <fsys,exn> list<authority-entry>

@@ -42,36 +42,6 @@ test "$explicit" = "$(cd "$tmp/private-authority" && pwd -P)"
   test "$($macwarden path)" = "$explicit"
 )
 
-mkdir -p "$tmp/legacy-authority/archive"
-printf '%s' '# Scope: keyboard' >"$tmp/legacy-authority/keyboard.md"
-printf '%s' '# Scope: trackpad' >"$tmp/legacy-authority/trackpad.md"
-printf '%s' 'keep' >"$tmp/legacy-authority/keep.txt"
-printf '%s' '# Scope: archived' >"$tmp/legacy-authority/archive/archived.md"
-legacy=$(cd "$tmp/legacy-authority" && pwd -P)
-printf '%s' "$legacy" >"$HOME/.config/macwarden/scopes-dir"
-clean_output=$(cd "$tmp/project/nested" && "$macwarden" setup)
-grep -F 'cleared legacy ScopeLog records: 2' <<<"$clean_output" >/dev/null
-test "$(tail -n 1 <<<"$clean_output")" = "$legacy"
-test "$(<"$HOME/.config/macwarden/scopes-dir")" = "$legacy"
-test ! -e "$legacy/keyboard.md"
-test ! -e "$legacy/trackpad.md"
-test -f "$legacy/keep.txt"
-test -f "$legacy/archive/archived.md"
-test -d "$legacy/observations"
-test -d "$legacy/transitions"
-test -z "$($macwarden list)"
-
-mkdir -p "$tmp/explicit-legacy"
-printf '%s' '# Scope: explicit' >"$tmp/explicit-legacy/explicit.md"
-explicit_clean_output=$($macwarden setup "$tmp/explicit-legacy")
-grep -F 'cleared legacy ScopeLog records: 1' <<<"$explicit_clean_output" >/dev/null
-test "$(tail -n 1 <<<"$explicit_clean_output")" = "$(cd "$tmp/explicit-legacy" && pwd -P)"
-test ! -e "$tmp/explicit-legacy/explicit.md"
-test -d "$tmp/explicit-legacy/observations"
-test -d "$tmp/explicit-legacy/transitions"
-
-$macwarden setup "$explicit" >/dev/null
-
 invalid_record="$explicit/observations/"$'bad\tname.md'
 : >"$invalid_record"
 if "$macwarden" list >/dev/null 2>&1; then
