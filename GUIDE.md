@@ -36,9 +36,9 @@ authority/
   transitions/<id>.md
 ```
 
-现有文件永不覆盖。CLI 先校验整个 draft，再写新的 Observations，最后写 Transitions；因此失败不会留下引用不存在 Observation 的 Transition。Git-backed authority 由 Capture Skill 在 readback 后提交。
+现有文件永不覆盖。CLI 先校验整个 draft，再以 atomic no-replace 方式写新的 Observations，持久同步 `observations/` 后才写 Transitions；因此失败不会留下引用不存在 Observation 的 Transition。若 record 已 link 但 durability 无法确认，错误会指出该 immutable record 可能已经存在，重试前应先用 `show` 核对。Git-backed authority 由 Capture Skill 在 readback 后提交。
 
-`list`、`show` 与 `capture` 都先把目录内容打开为一个经过验证的 Authority：record identity 必须与路径一致、identity 必须唯一、所有 Transition references 必须指向已存在的 Observation。文件系统枚举顺序不影响验证结果。
+`list`、`show` 与 `capture` 都先把目录内容打开为一个经过验证的 Authority：persisted bytes 必须 canonical，record identity 必须与路径一致、identity 必须唯一、所有 Transition references 必须指向已存在的 Observation。文件系统枚举顺序不影响验证结果。
 
 ## CLI
 
@@ -85,7 +85,7 @@ src/macwarden.kk       CLI, configured authority, filesystem adapter
 
 Core 的 implementation 按职责组织在 `src/macwarden/core/`：`record.kk` 只维护单条 record 的领域类型与 canonical grammar；`authority.kk` 维护集合不变量、查询与 append-only capture plan；`error.kk` 定义公开 failure contract。Typed failure flow 留在各自 implementation module 内，不形成新的外部 seam，caller 只 import `macwarden/core`。
 
-`Authority` 是 opaque validated value。CLI 只把目录读成 `AuthorityEntry`，并执行 Core 返回的 `PlannedWrite`；它不解析 record，也不自行验证 graph。Core 是唯一 record grammar authority。CLI 直接使用 Koka 标准 filesystem、environment、path、process 与 exception effects。没有 Repository abstraction、第三个 production seam、transaction manager、Capture record、semantic index、host mutation 或 recovery program。
+`Authority` 是 opaque validated value。CLI 只把目录读成 `AuthorityEntry`，并执行 Core 返回的 `PlannedWrite`；它不解析 record，也不自行验证 graph。Core 是唯一 record grammar authority。CLI 使用 Koka 标准 effects；`macwarden-inline.c` 只提供 atomic no-replace publication 与目录 durability barrier。没有 Repository abstraction、第三个 production seam、transaction manager、Capture record、semantic index、host mutation 或 recovery program。
 
 ## Codex 插件
 

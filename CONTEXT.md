@@ -29,7 +29,7 @@ Transition
   + After: ObservationId[]
 ```
 
-A Transition is one real migration edge. It may connect Observations from multiple Scopes. Before and After reference the same Observation structure; After contains only results established or changed by the Transition.
+A Transition is one real migration edge. It may connect Observations from multiple Scopes. Before and After are non-empty lists that reference the same Observation structure; After contains only results established or changed by the Transition.
 
 Reason explains why the previous state was left. Change records what actually happened between the boundaries, including affected targets, consequential operations, readbacks, temporary or durable effects, retained materials, evidence, and relevant provenance. Change is historical evidence, not a replay or recovery program.
 
