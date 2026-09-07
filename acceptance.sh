@@ -30,13 +30,19 @@ mkdir -p "$HOME" "$tmp/project/nested" "$tmp/elsewhere"
 git init -q "$tmp/project"
 
 default=$(cd "$tmp/project/nested" && "$macwarden" setup)
-test "$default" = "$(cd "$tmp/project" && pwd -P)/authority"
+test "$default" = "$(cd "$tmp/project" && pwd -P)/.macwarden"
 test -d "$default/observations"
 test -d "$default/transitions"
+test ! -d "$(cd "$tmp/project" && pwd -P)/observations"
+test ! -d "$(cd "$tmp/project" && pwd -P)/transitions"
 test "$(<"$HOME/.config/macwarden/scopes-dir")" = "$default"
 
 explicit=$($macwarden setup "$tmp/private-authority")
-test "$explicit" = "$(cd "$tmp/private-authority" && pwd -P)"
+test "$explicit" = "$(cd "$tmp/private-authority" && pwd -P)/.macwarden"
+same=$($macwarden setup "$explicit")
+test "$same" = "$explicit"
+test ! -d "$tmp/private-authority/observations"
+test ! -d "$tmp/private-authority/transitions"
 (
   cd "$tmp/elsewhere"
   test "$($macwarden path)" = "$explicit"

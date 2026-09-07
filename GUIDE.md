@@ -25,13 +25,13 @@ nix shell nixpkgs#koka --command koka -v0 -i./src -o macwarden src/macwarden.kk
 首次使用：
 
 ```console
-macwarden setup [AUTHORITY_DIR]
+macwarden setup [ROOT_DIR]
 ```
 
-省略目录时使用当前 Git 根目录下的 `authority/`。选择保存为绝对路径，后续工作目录不会改变它。Authority 只有两个 canonical record 目录：
+省略目录时使用当前 Git 根目录下的 `.macwarden/`；传入目录时也会在该目录下使用 `.macwarden/`（若传入的目录本身就是 `.macwarden` 则不重复嵌套）。选择保存为绝对路径，后续工作目录不会改变它。Authority 只有两个 canonical record 目录：
 
 ```text
-authority/
+.macwarden/
   observations/<id>.md
   transitions/<id>.md
 ```

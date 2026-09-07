@@ -14,7 +14,7 @@ The CLI validates structure and append-only identity. The Skills judge evidence 
 ```console
 ./acceptance.sh
 nix shell nixpkgs#koka --command koka -v0 -i./src -o macwarden src/macwarden.kk
-macwarden setup /path/to/private/authority
+macwarden setup /path/to/project
 ```
 
 The plugin contains `mw-capture` and `mw-recall`; it does not install the CLI. See [CONTEXT.md](CONTEXT.md) for the domain and [GUIDE.md](GUIDE.md) for operation.

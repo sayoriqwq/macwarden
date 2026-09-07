@@ -32,8 +32,11 @@ fun config-file()
 
 fun default-authority()
   match run-system-read("git rev-parse --show-toplevel")
-    Error(_) -> throw("current directory is not in a Git repository; pass AUTHORITY_DIR to macwarden setup")
-    Ok(root) -> root.trim.path / "authority"
+    Error(_) -> throw("current directory is not in a Git repository; pass ROOT_DIR to macwarden setup")
+    Ok(root) -> root.trim.path / ".macwarden"
+
+fun authority-directory(root : path) : path
+  if root.basename == ".macwarden" then root else root / ".macwarden"
 
 fun observations-directory(authority : path) : path
   authority / "observations"
@@ -48,7 +51,7 @@ fun ensure-authority(authority : path) : <fsys,exn> ()
 
 fun setup(directory : maybe<string>)
   val selected = match directory
-    Just(value) -> value.realpath
+    Just(value) -> authority-directory(value.realpath)
     Nothing -> default-authority().realpath
   ensure-authority(selected)
   val authority = selected.realpath
@@ -58,16 +61,16 @@ fun setup(directory : maybe<string>)
 fun load-root()
   val config = config-file()
   if !config.is-file then
-    throw("Macwarden is not set up; run: macwarden setup [AUTHORITY_DIR]")
+    throw("Macwarden is not set up; run: macwarden setup [ROOT_DIR]")
   val configured = read-text-file(config)
   if configured.is-empty then
-    throw("Macwarden is not set up; run: macwarden setup [AUTHORITY_DIR]")
+    throw("Macwarden is not set up; run: macwarden setup [ROOT_DIR]")
   val authority = configured.path
   if !authority.is-directory then
-    throw("configured authority is unavailable; run: macwarden setup [AUTHORITY_DIR]")
+    throw("configured authority is unavailable; run: macwarden setup [ROOT_DIR]")
   if !observations-directory(authority).is-directory ||
      !transitions-directory(authority).is-directory then
-    throw("configured authority is incomplete; run: macwarden setup [AUTHORITY_DIR]")
+    throw("configured authority is incomplete; run: macwarden setup [ROOT_DIR]")
   authority.realpath
 
 fun entries-in(directory : path, category : string) : <fsys,exn> list<authority-entry>
@@ -124,7 +127,7 @@ val help =
   "usage: macwarden <command> [options]\n\n" ++
   "Maintain one configured directory of immutable Observations and Transitions.\n\n" ++
   "commands:\n" ++
-  "  setup [AUTHORITY_DIR]              configure the authoritative directory\n" ++
+  "  setup [ROOT_DIR]                   configure ROOT_DIR/.macwarden\n" ++
   "  path                               print the configured directory\n" ++
   "  list                               list record selectors\n" ++
   "  show <selector>...                 show canonical records\n" ++
@@ -165,7 +168,7 @@ fun run()
     ["setup", "-h"] -> println(help)
     ["setup"] -> setup(Nothing)
     ["setup", directory] -> setup(Just(directory))
-    Cons("setup", _) -> throw("setup accepts at most one AUTHORITY_DIR")
+    Cons("setup", _) -> throw("setup accepts at most one ROOT_DIR")
     Cons(command, arguments) -> dispatch(load-root(), command, arguments)
 
 pub fun main()
