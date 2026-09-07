@@ -1,20 +1,20 @@
 ---
 name: mw-capture
-description: 'Use when a request begins with "mw: capture", or when `mw-recall` closes verified host work, to append evidence-backed Observations and Transitions to Macwarden.'
+description: 'Capture verified host state when a request starts with "mw: capture", or when `mw-recall` has completed authorized host work and needs to close the loop.'
 ---
 
 # Macwarden capture
 
-`mw: capture` authorizes writes to Macwarden for the current task or conversation.
+Use this skill to append evidence-backed records to the configured authority. Host mutation is a separate authorized step.
 
 ## Process
 
-1. **Establish authority.** Run `macwarden path`, read `macwarden capture --help`, then use `macwarden list` and the smallest necessary `macwarden show` calls. Stop on unexplained Git changes in the affected authority paths. **Complete when:** the authority and relevant existing records are known.
+1. **Establish authority.** Run `macwarden path`, then `macwarden list`. Show only the records that you may reuse or must connect through a Transition. If the authority is Git-backed, resolve every pre-existing change in its affected paths before writing; pause when any remains unexplained. **Complete when:** `path` and `list` succeed, every reused or referenced selector has been shown, and pre-existing authority changes are understood.
 
-2. **Distill evidence.** An Observation contains one stable Scope, Context that attributes when and how the observation was established, and readback-confirmed State facts. Mark unsupported facts `unknown`; distinguish observed, reported, sourced, and inferred claims in Context. A Transition records one Reason, the actual Change, and Before/After Observation IDs. After contains only observations established or changed by that Transition; simultaneous facts with unknown causality are standalone Observations. Reuse an existing Before record with unchanged canonical content. Without trustworthy Before evidence, capture only the new Observation. **Complete when:** every State is factual, every important assertion is attributed, and the Transition can cross all affected Scopes without inventing causality.
+2. **Distill evidence.** Give each Observation one stable Scope, a Context that attributes when and how it was established, and State facts confirmed by readback. Mark unsupported facts `unknown`; classify claims in Context as observed, reported, sourced, or inferred. Give each Transition one Reason, the actual Change, and Before/After Observation IDs. Put only results established or changed by the Transition in After; use standalone Observations for simultaneous facts whose causality is unknown. Reuse an unchanged existing Before record. Without trustworthy Before evidence, capture the new Observation only. **Complete when:** every State fact has evidence, every important claim has attribution, and every Transition crosses its Scopes without invented causality.
 
-3. **Build one draft.** Copy [observation.md](references/observation.md) for standalone evidence or [transition.md](references/transition.md) for a change. Patch every placeholder. Write Context, State, Reason, and Change in the user's language; preserve IDs, paths, commands, option names, and quoted source text verbatim. For additional Scopes, repeat the same Observation record block and add its ID to Before or After. Do not introduce another schema. **Complete when:** one draft contains every required canonical record and no placeholder remains.
+3. **Build the draft.** Use [observation.md](references/observation.md) for standalone evidence and [transition.md](references/transition.md) for a change. Replace every placeholder. Write Context, State, Reason, and Change in the user's language; preserve IDs, paths, commands, option names, and quoted source text verbatim. For additional Scopes, repeat the template's Observation block and add each ID to the matching Before or After list. **Complete when:** the draft contains only canonical records, every required field is filled, and no placeholder remains.
 
-4. **Capture and verify.** Run `macwarden capture <draft.md>`, then `macwarden show` every returned selector. If capture reports that an immutable record may already exist, show that selector before retrying. If the authority is Git-backed, commit only the new records after verification and confirm those paths are clean; otherwise report that no version history exists. **Complete when:** canonical records match the evidence and the write is committed or explicitly reported unversioned.
+4. **Capture and verify.** Run `macwarden capture <draft.md>`. For each returned selector, run `macwarden show`; when capture reports a possible immutable-record conflict, show that selector before any retry. For a Git-backed authority, commit only the verified new records and confirm the affected paths are clean. For an unversioned authority, report that fact. **Complete when:** capture reports `no changes` or every new selector is shown and matches the evidence, and version-history status is reported.
 
-Return the new Observation and Transition selectors plus a concise statement of what was recorded. Do not search old conversations. Host mutation requires its own explicit instruction.
+Return the new Observation and Transition selectors plus a concise statement of what was recorded. Keep authority and current readback as the source of truth; perform host mutation only in its separately authorized work.
